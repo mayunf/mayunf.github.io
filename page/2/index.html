@@ -386,6 +386,136 @@
   
   
   <div class="post-block">
+    <link itemprop="mainEntityOfPage" href="http://blog.mayunfeng.com/2018/12/03/laravel-1071/">
+
+    <span hidden itemprop="author" itemscope="" itemtype="http://schema.org/Person">
+      <meta itemprop="name" content="马运锋">
+      <meta itemprop="description" content="">
+      <meta itemprop="image" content="/images/avatar.jpg">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope="" itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="马运锋的博客">
+    </span>
+
+    
+      <header class="post-header">
+
+        
+        
+          <h1 class="post-title" itemprop="name headline">
+                
+                <a class="post-title-link" href="/2018/12/03/laravel-1071/" itemprop="url">Specified key was too long; max key length is 1000 bytes</a></h1>
+        
+
+        <div class="post-meta">
+          <span class="post-time">
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">发表于</span>
+              
+              <time title="创建于" itemprop="dateCreated datePublished" datetime="2018-12-03T17:25:55+08:00">
+                2018-12-03
+              </time>
+            
+
+            
+
+            
+          </span>
+
+          
+
+          
+            
+          
+
+          
+          
+
+          
+
+          
+
+          
+
+        </div>
+      </header>
+    
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+      
+
+      
+        
+          
+            <h2 id="错误原因"><a href="#错误原因" class="headerlink" title="错误原因"></a>错误原因</h2><p>Laravel 5.4 以后 默认使用 <code>utf8mb4</code> 字符编码，而不是之前的utf8编码。因此运行 <code>php artisan migrate</code> 会出现如下错误：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line">$ php artisan migrate</span><br><span class="line">Migration table created successfully.</span><br><span class="line"></span><br><span class="line">In Connection.php line 664:</span><br><span class="line"></span><br><span class="line">  SQLSTATE[42000]: Syntax error or access violation: 1071 Specified key was t</span><br><span class="line">  oo long; max key length is 1000 bytes (SQL: alter table `m_users` add uniqu</span><br><span class="line">  e `users_email_unique`(`email`))</span><br><span class="line"></span><br><span class="line"></span><br><span class="line">In Connection.php line 458:</span><br><span class="line"></span><br><span class="line">  SQLSTATE[42000]: Syntax error or access violation: 1071 Specified key was t</span><br><span class="line">  oo long; max key length is 1000 bytes</span><br></pre></td></tr></table></figure>
+<p>MySql支持的utf8编码最大字符长度为3字节，如果遇到4字节的宽字符就会出现插入异常。三个字节UTF-8最大能编码的Unicode字符是0xffff，即Unicode中的基本多文种平面（BMP）。因而包括Emoji表情（Emoji是一种特殊的Unicode编码）在内的非基本多文种平面的Unicode字符都无法使用MySql的utf8字符集存储。</p>
+<p>这也应该就是Laravel 5.4改用4字节长度的utf8mb4字符编码的原因之一。不过要注意的是，只有MySql 5.5.3版本以后才开始支持utf8mb4字符编码（查看版本：selection version();）。</p>
+<h2 id="解决办法"><a href="#解决办法" class="headerlink" title="解决办法"></a>解决办法</h2><ol>
+<li><p>升级MySql版本到5.5.3以上。</p>
+</li>
+<li><p>手动配置迁移命令migrate生成的默认字符串长度，在AppServiceProvider中调用Schema::defaultStringLength方法来实现配置：</p>
+</li>
+</ol>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br></pre></td><td class="code"><pre><span class="line">namespace App\Providers;</span><br><span class="line"></span><br><span class="line">use Illuminate\Support\ServiceProvider;</span><br><span class="line">use Illuminate\Support\Facades\Schema;</span><br><span class="line"></span><br><span class="line">class AppServiceProvider extends ServiceProvider</span><br><span class="line">&#123;</span><br><span class="line">    /**</span><br><span class="line">     * Bootstrap any application services.</span><br><span class="line">     *</span><br><span class="line">     * @<span class="built_in">return</span> void</span><br><span class="line">     */</span><br><span class="line">    public <span class="keyword">function</span> boot()</span><br><span class="line">    &#123;</span><br><span class="line">        //</span><br><span class="line">        Schema::defaultStringLength(191);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    /**</span><br><span class="line">     * Register any application services.</span><br><span class="line">     *</span><br><span class="line">     * @<span class="built_in">return</span> void</span><br><span class="line">     */</span><br><span class="line">    public <span class="keyword">function</span> register()</span><br><span class="line">    &#123;</span><br><span class="line">        //</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+          
+        
+      
+    </div>
+    
+    
+    
+
+    
+
+    
+
+    
+
+    <footer class="post-footer">
+      
+
+      
+
+      
+
+      
+      
+        <div class="post-eof"></div>
+      
+    </footer>
+  </div>
+  
+  
+  
+  </article>
+
+
+    
+      
+
+  
+
+  
+  
+  
+
+  <article class="post post-type-normal" itemscope="" itemtype="http://schema.org/Article">
+  
+  
+  
+  <div class="post-block">
     <link itemprop="mainEntityOfPage" href="http://blog.mayunfeng.com/2018/12/03/git-delete-remote-tags/">
 
     <span hidden itemprop="author" itemscope="" itemtype="http://schema.org/Person">
@@ -582,136 +712,6 @@
             <h2 id="删除远程branch"><a href="#删除远程branch" class="headerlink" title="删除远程branch"></a>删除远程<code>branch</code></h2><h3 id="查看全部分支"><a href="#查看全部分支" class="headerlink" title="查看全部分支"></a>查看全部分支</h3><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">git branch -a</span><br><span class="line"></span><br><span class="line">* dev</span><br><span class="line">  master</span><br><span class="line">  remotes/online/dev</span><br><span class="line">  remotes/online/master</span><br><span class="line">  remotes/origin/dev</span><br><span class="line">  remotes/origin/master</span><br><span class="line">  remotes/origin/dev-test</span><br></pre></td></tr></table></figure>
 <h3 id="删除远程分支"><a href="#删除远程分支" class="headerlink" title="删除远程分支"></a>删除远程分支</h3><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">git push origin --delete dev-test</span><br></pre></td></tr></table></figure>
 <h2 id="删除本地分支"><a href="#删除本地分支" class="headerlink" title="删除本地分支"></a>删除本地分支</h2><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">git branch -d dev</span><br></pre></td></tr></table></figure>
-
-          
-        
-      
-    </div>
-    
-    
-    
-
-    
-
-    
-
-    
-
-    <footer class="post-footer">
-      
-
-      
-
-      
-
-      
-      
-        <div class="post-eof"></div>
-      
-    </footer>
-  </div>
-  
-  
-  
-  </article>
-
-
-    
-      
-
-  
-
-  
-  
-  
-
-  <article class="post post-type-normal" itemscope="" itemtype="http://schema.org/Article">
-  
-  
-  
-  <div class="post-block">
-    <link itemprop="mainEntityOfPage" href="http://blog.mayunfeng.com/2018/12/03/laravel-1071/">
-
-    <span hidden itemprop="author" itemscope="" itemtype="http://schema.org/Person">
-      <meta itemprop="name" content="马运锋">
-      <meta itemprop="description" content="">
-      <meta itemprop="image" content="/images/avatar.jpg">
-    </span>
-
-    <span hidden itemprop="publisher" itemscope="" itemtype="http://schema.org/Organization">
-      <meta itemprop="name" content="马运锋的博客">
-    </span>
-
-    
-      <header class="post-header">
-
-        
-        
-          <h1 class="post-title" itemprop="name headline">
-                
-                <a class="post-title-link" href="/2018/12/03/laravel-1071/" itemprop="url">Specified key was too long; max key length is 1000 bytes</a></h1>
-        
-
-        <div class="post-meta">
-          <span class="post-time">
-            
-              <span class="post-meta-item-icon">
-                <i class="fa fa-calendar-o"></i>
-              </span>
-              
-                <span class="post-meta-item-text">发表于</span>
-              
-              <time title="创建于" itemprop="dateCreated datePublished" datetime="2018-12-03T17:25:55+08:00">
-                2018-12-03
-              </time>
-            
-
-            
-
-            
-          </span>
-
-          
-
-          
-            
-          
-
-          
-          
-
-          
-
-          
-
-          
-
-        </div>
-      </header>
-    
-
-    
-    
-    
-    <div class="post-body" itemprop="articleBody">
-
-      
-      
-
-      
-        
-          
-            <h2 id="错误原因"><a href="#错误原因" class="headerlink" title="错误原因"></a>错误原因</h2><p>Laravel 5.4 以后 默认使用 <code>utf8mb4</code> 字符编码，而不是之前的utf8编码。因此运行 <code>php artisan migrate</code> 会出现如下错误：</p>
-<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line">$ php artisan migrate</span><br><span class="line">Migration table created successfully.</span><br><span class="line"></span><br><span class="line">In Connection.php line 664:</span><br><span class="line"></span><br><span class="line">  SQLSTATE[42000]: Syntax error or access violation: 1071 Specified key was t</span><br><span class="line">  oo long; max key length is 1000 bytes (SQL: alter table `m_users` add uniqu</span><br><span class="line">  e `users_email_unique`(`email`))</span><br><span class="line"></span><br><span class="line"></span><br><span class="line">In Connection.php line 458:</span><br><span class="line"></span><br><span class="line">  SQLSTATE[42000]: Syntax error or access violation: 1071 Specified key was t</span><br><span class="line">  oo long; max key length is 1000 bytes</span><br></pre></td></tr></table></figure>
-<p>MySql支持的utf8编码最大字符长度为3字节，如果遇到4字节的宽字符就会出现插入异常。三个字节UTF-8最大能编码的Unicode字符是0xffff，即Unicode中的基本多文种平面（BMP）。因而包括Emoji表情（Emoji是一种特殊的Unicode编码）在内的非基本多文种平面的Unicode字符都无法使用MySql的utf8字符集存储。</p>
-<p>这也应该就是Laravel 5.4改用4字节长度的utf8mb4字符编码的原因之一。不过要注意的是，只有MySql 5.5.3版本以后才开始支持utf8mb4字符编码（查看版本：selection version();）。</p>
-<h2 id="解决办法"><a href="#解决办法" class="headerlink" title="解决办法"></a>解决办法</h2><ol>
-<li><p>升级MySql版本到5.5.3以上。</p>
-</li>
-<li><p>手动配置迁移命令migrate生成的默认字符串长度，在AppServiceProvider中调用Schema::defaultStringLength方法来实现配置：</p>
-</li>
-</ol>
-<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br></pre></td><td class="code"><pre><span class="line">namespace App\Providers;</span><br><span class="line"></span><br><span class="line">use Illuminate\Support\ServiceProvider;</span><br><span class="line">use Illuminate\Support\Facades\Schema;</span><br><span class="line"></span><br><span class="line">class AppServiceProvider extends ServiceProvider</span><br><span class="line">&#123;</span><br><span class="line">    /**</span><br><span class="line">     * Bootstrap any application services.</span><br><span class="line">     *</span><br><span class="line">     * @<span class="built_in">return</span> void</span><br><span class="line">     */</span><br><span class="line">    public <span class="keyword">function</span> boot()</span><br><span class="line">    &#123;</span><br><span class="line">        //</span><br><span class="line">        Schema::defaultStringLength(191);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    /**</span><br><span class="line">     * Register any application services.</span><br><span class="line">     *</span><br><span class="line">     * @<span class="built_in">return</span> void</span><br><span class="line">     */</span><br><span class="line">    public <span class="keyword">function</span> register()</span><br><span class="line">    &#123;</span><br><span class="line">        //</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
 
           
         
